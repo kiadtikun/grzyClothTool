@@ -573,13 +573,14 @@ namespace grzyClothTool.Models
 
             GDrawable FindTargetDrawable(int number)
             {
-                var found = drawablesOfType.FirstOrDefault(x => x.Number == number);
-                found ??= pendingDrawables.FirstOrDefault(x =>
+                // Different DLCs reuse source numbers. Prefer the base in this import batch.
+                var found = pendingDrawables.FirstOrDefault(x =>
                     x.TypeNumeric == drawableType &&
                     x.IsProp == isProp &&
                     x.Sex == sex &&
                     pendingDrawableSourceNumbers.TryGetValue(x, out var srcNum) &&
                     srcNum == number);
+                found ??= drawablesOfType.FirstOrDefault(x => x.Number == number);
                 return found;
             }
 
@@ -676,23 +677,7 @@ namespace grzyClothTool.Models
             var duplicatesDict = DuplicateDetector.CheckDrawableDuplicatesBatch(drawables);
 
             var drawablesWithDuplicates = drawables.Where(d => duplicatesDict.ContainsKey(d)).ToList();
-            var drawablesWithoutDuplicates = drawables.Where(d => !duplicatesDict.ContainsKey(d)).ToList();
-
-            var addedAny = false;
-
-            // Add in chunks: one dispatcher hop per chunk instead of per drawable, at background
-            // priority so the UI stays responsive during large imports.
-            foreach (var chunk in drawablesWithoutDuplicates.Chunk(64))
-            {
-                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                {
-                    foreach (var drawable in chunk)
-                    {
-                        AddDrawableInternal(drawable, markUnsaved: false);
-                    }
-                }, System.Windows.Threading.DispatcherPriority.Background);
-                addedAny = true;
-            }
+            var acceptedDrawables = drawables.Where(d => !duplicatesDict.ContainsKey(d)).ToHashSet();
 
             if (drawablesWithDuplicates.Count > 0)
             {
@@ -712,17 +697,7 @@ namespace grzyClothTool.Models
 
                 if (result != null && !result.Cancelled)
                 {
-                    foreach (var chunk in result.DrawablesToAdd.Chunk(64))
-                    {
-                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            foreach (var drawable in chunk)
-                            {
-                                AddDrawableInternal(drawable, markUnsaved: false);
-                            }
-                        }, System.Windows.Threading.DispatcherPriority.Background);
-                        addedAny = true;
-                    }
+                    acceptedDrawables.UnionWith(result.DrawablesToAdd);
 
                     foreach (var drawable in result.DrawablesToSkip)
                     {
@@ -738,7 +713,19 @@ namespace grzyClothTool.Models
                 }
             }
 
-            if (addedAny)
+            // Keep accepted duplicates in their original sorted position when assigning slots.
+            foreach (var chunk in drawables.Where(acceptedDrawables.Contains).Chunk(64))
+            {
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    foreach (var drawable in chunk)
+                    {
+                        AddDrawableInternal(drawable, markUnsaved: false);
+                    }
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            }
+
+            if (acceptedDrawables.Count > 0)
             {
                 SaveHelper.SetUnsavedChanges(true);
             }

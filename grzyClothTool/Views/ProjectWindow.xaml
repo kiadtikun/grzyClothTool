@@ -245,6 +245,7 @@ mc:Ignorable="d">
                                 
                                 <Border Grid.Row="1" Padding="8">
                                     <c:DrawableList x:Name="DrawableListControl"
+                                                   GroupByDrawableType="True"
                                                    ItemsSource="{Binding Drawables, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                    SearchText="{Binding Text, ElementName=HeaderSearchBox, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                    DrawableListKeyDown="SelectedDrawable_KeyDown"

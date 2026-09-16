@@ -115,6 +115,7 @@ namespace grzyClothTool.Views
 
         private readonly bool _showGender;
         private readonly bool _showDrawableProperties;
+        private readonly bool _reviewImport;
         private bool _isApplyingBulkUpdate;
 
         public List<string> GenderTypes { get; set; } = ["Female", "Male"];
@@ -135,6 +136,7 @@ namespace grzyClothTool.Views
             get
             {
                 var unresolvedCount = Items.Count(x => !x.IsResolved);
+                if (_reviewImport && unresolvedCount == 0) return "Review drawable import";
                 return unresolvedCount == 1
                     ? "Resolve 1 drawable before import"
                     : $"Resolve {unresolvedCount} drawables before import";
@@ -155,7 +157,9 @@ namespace grzyClothTool.Views
                     parts.Add("drawable properties");
                 }
 
-                return $"Click rows to check them, then apply {string.Join(" and ", parts)} to checked files. Resolved files are hidden unless Show resolved is enabled.";
+                return _reviewImport
+                    ? "Review detected Gender and Drawable Type. Select files and use Apply to change them, then import. Matching .ytd files in the same folder are included automatically."
+                    : $"Click rows to check them, then apply {string.Join(" and ", parts)} to checked files. Resolved files are hidden unless Show resolved is enabled.";
             }
         }
         public string SelectionSummary => $"{Items.Count(x => x.IsSelected)} checked, {Items.Count(x => x.IsResolved)} of {Items.Count} resolved";
@@ -252,12 +256,15 @@ namespace grzyClothTool.Views
             Dictionary<string, Enums.SexType?> detectedGenders = null,
             Dictionary<string, (bool IsProp, int DrawableType)?> detectedDrawableTypes = null,
             bool showGender = false,
-            bool showDrawableProperties = true)
+            bool showDrawableProperties = true,
+            bool reviewImport = false)
         {
             InitializeComponent();
 
             _showGender = showGender;
             _showDrawableProperties = showDrawableProperties;
+            _reviewImport = reviewImport;
+            ShowResolvedItems = reviewImport;
 
             foreach (var path in paths)
             {
@@ -271,12 +278,21 @@ namespace grzyClothTool.Views
                     gender,
                     drawableType,
                     _showGender,
-                    _showDrawableProperties);
+                    _showDrawableProperties)
+                {
+                    IsSelected = reviewImport
+                };
                 item.PropertyChanged += ImportItem_PropertyChanged;
                 Items.Add(item);
             }
 
             DataContext = this;
+            if (reviewImport)
+            {
+                SelectedAssetType = Items.All(x => x.IsProp == true) ? "Prop" : "Component";
+                SetDrawableTypeOptions(SelectedAssetType);
+                SyncControlSelectionsFromSingleTarget();
+            }
         }
 
         private void AssetType_IsUpdated(object sender, Controls.UpdatedEventArgs e)
@@ -312,7 +328,7 @@ namespace grzyClothTool.Views
 
             foreach (var item in targetItems)
             {
-                item.IsSelected = !item.IsResolved;
+                item.IsSelected = _reviewImport || !item.IsResolved;
             }
             _isApplyingBulkUpdate = false;
 
@@ -340,7 +356,7 @@ namespace grzyClothTool.Views
 
             foreach (var item in targetItems)
             {
-                item.IsSelected = !item.IsResolved;
+                item.IsSelected = _reviewImport || !item.IsResolved;
             }
             _isApplyingBulkUpdate = false;
 

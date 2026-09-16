@@ -39,6 +39,8 @@ public class SaveHelperSerializationTests
         }
 
         manager.Addons.Add(addon);
+        addon.Drawables[0].DisplayName = "mp_m_freemode_01_talecloth01^jbib_005_u.ydd";
+        addon.Drawables[0].Textures[0].OriginalFileName = "mp_m_freemode_01_talecloth01^jbib_diff_005_a_uni.ytd";
 
         // Serialize with the cached options used by autosave
         var json = JsonSerializer.Serialize(manager, SaveHelper.SerializerOptions);
@@ -58,5 +60,8 @@ public class SaveHelperSerializationTests
         Assert.Equal(3, restored.Addons[0].Drawables.Count);
         Assert.Equal("jbib_000_u", restored.Addons[0].Drawables[0].Name);
         Assert.Single(restored.Addons[0].Drawables[0].Textures);
+        Assert.Equal(addon.Drawables[0].DisplayName, restored.Addons[0].Drawables[0].DisplayName);
+        Assert.Equal(addon.Drawables[0].Textures[0].OriginalFileName, restored.Addons[0].Drawables[0].Textures[0].ListDisplayName);
+        Assert.Equal("jbib_diff_000_a_uni", restored.Addons[0].Drawables[0].Textures[0].GetBuildName());
     }
 }

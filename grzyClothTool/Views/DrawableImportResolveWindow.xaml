@@ -171,6 +171,7 @@
                         SelectedItem="{Binding SelectedGender}"
                         Margin="0,0,0,5"/>
                     <c:CustomButton
+                        x:Name="ApplyGenderButton"
                         Grid.Column="2"
                         Label="Apply gender"
                         CornerRadius="5"
@@ -205,6 +206,7 @@
                         SelectedItem="{Binding SelectedDrawableType}"
                         Margin="0,0,0,5"/>
                     <c:CustomButton
+                        x:Name="ApplyDrawableButton"
                         Grid.Column="4"
                         Label="Apply properties"
                         CornerRadius="5"

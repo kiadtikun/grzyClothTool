@@ -45,7 +45,33 @@ public class GTexture : INotifyPropertyChanged
             {
                 _displayName = value;
                 OnPropertyChanged(nameof(DisplayName));
+                OnPropertyChanged(nameof(ListDisplayName));
             }
+        }
+    }
+
+    private string _originalFileName = string.Empty;
+    public string OriginalFileName
+    {
+        get => _originalFileName;
+        set
+        {
+            _originalFileName = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ListDisplayName));
+        }
+    }
+
+    [JsonIgnore]
+    public string ListDisplayName
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(OriginalFileName)) return OriginalFileName;
+            var fileName = Path.GetFileName(FilePath);
+            // Older external projects still have their original paths; copied GUID assets don't.
+            return !string.IsNullOrEmpty(fileName) && !Guid.TryParse(Path.GetFileNameWithoutExtension(fileName), out _)
+                ? fileName : DisplayName;
         }
     }
 

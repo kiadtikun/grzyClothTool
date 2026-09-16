@@ -112,7 +112,7 @@ namespace grzyClothTool.Views
                 {
                     LogHelper.Log($"Scanning files to add...", LogType.Info);
 
-                    await MainWindow.AddonManager.AddDrawables(files.FileNames, sexBtn);
+                    await MainWindow.AddonManager.AddDrawables(DrawableImportOrder.OrderFiles(files.FileNames), sexBtn);
 
                     ProgressHelper.Stop("Added drawables in {0}", true);
                     SaveHelper.SetUnsavedChanges(true);
@@ -154,14 +154,7 @@ namespace grzyClothTool.Views
                             fileList.AddRange(files);
                         }
                         
-                        return fileList
-                            .OrderBy(f =>
-                            {
-                                var number = FileHelper.GetDrawableNumberFromFileName(Path.GetFileName(f));
-                                return number ?? int.MaxValue;
-                            })
-                            .ThenBy(Path.GetFileName)
-                            .ToArray();
+                        return DrawableImportOrder.OrderFiles(fileList);
                     });
 
                     if (allFiles.Length == 0)
@@ -270,14 +263,7 @@ namespace grzyClothTool.Views
                         fileList.AddRange(files);
                     }
 
-                    return fileList
-                        .OrderBy(f =>
-                        {
-                            var number = FileHelper.GetDrawableNumberFromFileName(Path.GetFileName(f));
-                            return number ?? int.MaxValue;
-                        })
-                        .ThenBy(Path.GetFileName)
-                        .ToArray();
+                    return DrawableImportOrder.OrderFiles(fileList);
                 });
 
                 if (allFiles.Length == 0)
@@ -297,15 +283,15 @@ namespace grzyClothTool.Views
             }
         }
 
-        private static async Task AddDrawablesByDetectedGenderAsync(IEnumerable<string> filePaths, Enums.SexType? forcedGender = null)
+        private static async Task AddDrawablesByDetectedGenderAsync(IEnumerable<string> filePaths, Enums.SexType? forcedGender = null, bool reviewImport = false)
         {
-            var files = filePaths.Distinct().ToList();
+            var files = DrawableImportOrder.OrderFiles(filePaths).ToList();
             if (files.Count == 0)
             {
                 return;
             }
 
-            var resolution = ResolveDrawableImport(files, forcedGender);
+            var resolution = ResolveDrawableImport(files, forcedGender, reviewImport);
             if (resolution == null)
             {
                 LogHelper.Log("Adding drawables cancelled while resolving import settings.", LogType.Info);
@@ -327,20 +313,16 @@ namespace grzyClothTool.Views
             {
                 LogHelper.Log($"Adding {files.Count} drawable file(s): {maleFiles.Length} male, {femaleFiles.Length} female.", LogType.Info);
 
-                if (maleFiles.Length > 0)
+                // Complete each DLC (both genders) before starting the next one.
+                foreach (var dlc in files.GroupBy(DrawableImportOrder.GetDlcName, StringComparer.OrdinalIgnoreCase))
                 {
-                    var maleTypes = resolution.DrawableTypes
-                        .Where(x => maleFiles.Contains(x.Key))
-                        .ToDictionary(x => x.Key, x => x.Value);
-                    await MainWindow.AddonManager.AddDrawables(maleFiles, Enums.SexType.male, resolvedDrawableTypes: maleTypes);
-                }
-
-                if (femaleFiles.Length > 0)
-                {
-                    var femaleTypes = resolution.DrawableTypes
-                        .Where(x => femaleFiles.Contains(x.Key))
-                        .ToDictionary(x => x.Key, x => x.Value);
-                    await MainWindow.AddonManager.AddDrawables(femaleFiles, Enums.SexType.female, resolvedDrawableTypes: femaleTypes);
+                    LogHelper.Log($"Importing DLC: {(string.IsNullOrEmpty(dlc.Key) ? "No DLC prefix" : dlc.Key)} ({dlc.Count()} files)", LogType.Info);
+                    foreach (var genderFiles in dlc.GroupBy(file => resolution.Genders[file]))
+                    {
+                        var paths = genderFiles.ToArray();
+                        var types = paths.ToDictionary(file => file, file => resolution.DrawableTypes[file]);
+                        await MainWindow.AddonManager.AddDrawables(paths, genderFiles.Key, resolvedDrawableTypes: types);
+                    }
                 }
 
                 ProgressHelper.Stop("Added drawables in {0}", true);
@@ -364,7 +346,7 @@ namespace grzyClothTool.Views
             return gender == Enums.SexType.male ? "Male" : "Female";
         }
 
-        private static DrawableImportResolution ResolveDrawableImport(IEnumerable<string> files, Enums.SexType? forcedGender)
+        private static DrawableImportResolution ResolveDrawableImport(IEnumerable<string> files, Enums.SexType? forcedGender, bool reviewImport = false)
         {
             var fileList = files.ToList();
             var detectedGenders = fileList.ToDictionary(
@@ -374,8 +356,8 @@ namespace grzyClothTool.Views
                 file => file,
                 file => FileHelper.TryResolveDrawableTypeFromFileName(file));
 
-            var needsGender = !forcedGender.HasValue && detectedGenders.Values.Any(x => !x.HasValue);
-            var needsDrawableProperties = detectedDrawableTypes.Values.Any(x => !x.HasValue);
+            var needsGender = !forcedGender.HasValue && (reviewImport || detectedGenders.Values.Any(x => !x.HasValue));
+            var needsDrawableProperties = reviewImport || needsGender || detectedDrawableTypes.Values.Any(x => !x.HasValue);
 
             if (!needsGender && !needsDrawableProperties)
             {
@@ -391,7 +373,8 @@ namespace grzyClothTool.Views
                 detectedGenders,
                 detectedDrawableTypes,
                 needsGender,
-                needsDrawableProperties)
+                needsDrawableProperties,
+                reviewImport)
             {
                 Owner = System.Windows.Application.Current.MainWindow
             };
@@ -631,7 +614,7 @@ namespace grzyClothTool.Views
                 }
                 else if (e.Data.GetDataPresent("FileGroupDescriptor") || e.Data.GetDataPresent("FileGroupDescriptorW"))
                 {
-                    var filter = DragDropHelper.CreateExtensionFilter(".ydd");
+                    var filter = DragDropHelper.CreateExtensionFilter(".ydd", ".ytd");
                     var hasYddFiles = DragDropHelper.CheckForFilesInDescriptor(e.Data, filter);
                     e.Effects = hasYddFiles ? WpfDragDropEffects.Copy : WpfDragDropEffects.None;
                 }
@@ -741,7 +724,7 @@ namespace grzyClothTool.Views
                     return;
                 }
 
-                await AddDrawablesByDetectedGenderAsync(accessibleFiles);
+                await AddDrawablesByDetectedGenderAsync(accessibleFiles, reviewImport: true);
             }
             catch (Exception ex)
             {

@@ -207,6 +207,7 @@
                                                       Margin="0,0,4,0"
                                                       Visibility="{Binding HasDisplayName, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                             <TextBlock x:Name="NameText"
+                                                      ToolTip="{Binding DisplayName}"
                                                       FontSize="11"
                                                       FontWeight="Medium"
                                                       Foreground="{DynamicResource Brush900}"

@@ -275,7 +275,10 @@ public static class FileHelper
         var isReserved = await IsReservedDrawable(filePath);
         if (isReserved)
         {
-            return new GDrawableReserved(sex, isProp, typeNumber, countOfType);
+            return new GDrawableReserved(sex, isProp, typeNumber, countOfType)
+            {
+                DisplayName = Path.GetFileName(filePath)
+            };
         }
 
         var name = EnumHelper.GetName(typeNumber, isProp);
@@ -333,10 +336,16 @@ public static class FileHelper
 
         // Create texture objects
         var textures = new ObservableCollection<GTexture>(
-            texturesList.Select(t => new GTexture(Guid.Empty, t.path, typeNumber, countOfType, t.txtNumber, drawableHasSkin, isProp))
+            texturesList.Select(t => new GTexture(Guid.Empty, t.path, typeNumber, countOfType, t.txtNumber, drawableHasSkin, isProp)
+            {
+                OriginalFileName = Path.GetFileName(matchingTextures[t.txtNumber])
+            })
         );
 
-        var drawable = new GDrawable(drawableGuid, drawablePath, sex, isProp, typeNumber, countOfType, drawableHasSkin, textures);
+        var drawable = new GDrawable(drawableGuid, drawablePath, sex, isProp, typeNumber, countOfType, drawableHasSkin, textures)
+        {
+            DisplayName = Path.GetFileName(filePath)
+        };
         return drawable;
     }
 
@@ -391,21 +400,15 @@ public static class FileHelper
             addonName = split[0];
             fileName = split[1];
         }
-        string[] nameParts = Path.GetFileNameWithoutExtension(fileName).Split("_");
-
-        string searchedNumber, regexToSearch;
-        if (nameParts.Length == 1) //this will happen when someone is adding weirdly named ydds (for example 5.ydd or m.ydd)
-        {
-            searchedNumber = nameParts[0];
-            var escapedNumber = Regex.Escape(searchedNumber);
-            regexToSearch = $"^{escapedNumber}([a-z]|_[a-z])?$";
-        } 
-        else
-        {
-            searchedNumber = isProp ? nameParts[2] : nameParts[1];
-            var searchedName = isProp ? nameParts[0] + "_" + nameParts[1] : nameParts[0];
-            regexToSearch = $"^{Regex.Escape(searchedName)}_diff_{Regex.Escape(searchedNumber)}";
-        }
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        // Match the source naming convention even when the user overrides its output type.
+        // Custom names (including underscores) may use a same-name YTD or letter variants.
+        var standardName = Regex.Match(stem, @"^(?<type>p_[a-z]+|[a-z]+)_(?<number>\d+)(?:_[a-z])?(?:_\d+)?$", RegexOptions.IgnoreCase);
+        var sameNamePattern = $"{Regex.Escape(stem)}(?:[a-z]|_[a-z])?";
+        var texturePattern = standardName.Success
+            ? $"(?:{sameNamePattern}|{Regex.Escape(standardName.Groups["type"].Value)}_diff_{Regex.Escape(standardName.Groups["number"].Value)}(?:_[a-z](?:_[a-z0-9]+)*)?)"
+            : sameNamePattern;
+        var regexToSearch = $"^{texturePattern}$";
 
         if (addonName != string.Empty)
         {
@@ -426,6 +429,8 @@ public static class FileHelper
 
         return ytds
             .Where(x => regex.IsMatch(Path.GetFileNameWithoutExtension(x)))
+            .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x, StringComparer.Ordinal)
             .ToList();
     }
 

@@ -10,6 +10,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -71,6 +72,21 @@ namespace grzyClothTool.Controls
 
         public object DrawableListSelectedValue => MyListBox.SelectedValue;
 
+        public static readonly DependencyProperty GroupByDrawableTypeProperty =
+            DependencyProperty.Register(nameof(GroupByDrawableType), typeof(bool), typeof(DrawableList),
+                new PropertyMetadata(false, (d, _) =>
+                {
+                    var list = (DrawableList)d;
+                    list.OnPropertyChanged(nameof(IsPrimaryGroupingByTypeName));
+                    list.SetupGrouping();
+                }));
+
+        public bool GroupByDrawableType
+        {
+            get => (bool)GetValue(GroupByDrawableTypeProperty);
+            set => SetValue(GroupByDrawableTypeProperty, value);
+        }
+
         private ICollectionView _drawablesView;
         public ICollectionView DrawablesView
         {
@@ -83,12 +99,10 @@ namespace grzyClothTool.Controls
 
         private bool _isDragging;
         private List<GDrawable> _pendingSelection;
-        private static readonly Dictionary<string, bool> value = [];
-
-        private readonly Dictionary<string, bool> _groupExpandedStates = value;
+        private static readonly ConditionalWeakTable<ObservableCollection<GDrawable>, Dictionary<string, bool>> GroupExpandedStates = new();
         private bool _isBatchUpdating = false;
 
-        public bool IsPrimaryGroupingByTypeName => SettingsHelper.Instance.DrawableGroupingMode == GroupingMode.ByType;
+        public bool IsPrimaryGroupingByTypeName => GroupByDrawableType || SettingsHelper.Instance.DrawableGroupingMode == GroupingMode.ByType;
 
         public DrawableList()
         {
@@ -125,9 +139,9 @@ namespace grzyClothTool.Controls
             if (e.OriginalSource is Expander expander && expander.DataContext is CollectionViewGroup group)
             {
                 var groupName = group.Name as string;
-                if (!string.IsNullOrEmpty(groupName))
+                if (!string.IsNullOrEmpty(groupName) && ItemsSource != null)
                 {
-                    _groupExpandedStates[groupName] = expander.IsExpanded;
+                    GroupExpandedStates.GetOrCreateValue(ItemsSource)[groupName] = expander.IsExpanded;
                 }
             }
         }
@@ -137,7 +151,7 @@ namespace grzyClothTool.Controls
             if (string.IsNullOrEmpty(groupName))
                 return true;
                 
-            return !_groupExpandedStates.TryGetValue(groupName, out bool isExpanded) || isExpanded;
+            return ItemsSource == null || !GroupExpandedStates.GetOrCreateValue(ItemsSource).TryGetValue(groupName, out bool isExpanded) || isExpanded;
         }
 
         private void MyListBox_MouseLeave(object sender, MouseEventArgs e)
@@ -271,7 +285,7 @@ namespace grzyClothTool.Controls
 
             DrawablesView = CollectionViewSource.GetDefaultView(ItemsSource);
 
-            var mode = SettingsHelper.Instance.DrawableGroupingMode;
+            var mode = GroupByDrawableType ? GroupingMode.ByType : SettingsHelper.Instance.DrawableGroupingMode;
 
             using (DrawablesView.DeferRefresh())
             {
@@ -295,7 +309,13 @@ namespace grzyClothTool.Controls
                 DrawablesView.SortDescriptions.Clear();
                 if (DrawablesView is ListCollectionView listView)
                 {
-                    listView.CustomSort = new DrawableGroupComparer();
+                    listView.CustomSort = mode == GroupingMode.ByType ? null : new DrawableGroupComparer();
+                    if (mode == GroupingMode.ByType)
+                    {
+                        listView.SortDescriptions.Add(new SortDescription(nameof(GDrawable.TypeName), ListSortDirection.Ascending));
+                        listView.SortDescriptions.Add(new SortDescription(nameof(GDrawable.Sex), ListSortDirection.Ascending));
+                        listView.SortDescriptions.Add(new SortDescription(nameof(GDrawable.Number), ListSortDirection.Ascending));
+                    }
                 }
 
                 if (DrawablesView is ICollectionViewLiveShaping liveView && liveView.CanChangeLiveGrouping)
@@ -312,6 +332,7 @@ namespace grzyClothTool.Controls
                         liveView.LiveSortingProperties.Clear();
                         liveView.LiveSortingProperties.Add(nameof(GDrawable.Group));
                         liveView.LiveSortingProperties.Add(nameof(GDrawable.TypeName));
+                        liveView.LiveSortingProperties.Add(nameof(GDrawable.Sex));
                         liveView.LiveSortingProperties.Add(nameof(GDrawable.Number));
                         liveView.IsLiveSorting = true;
                     }
@@ -544,7 +565,8 @@ namespace grzyClothTool.Controls
                         texture.IsProp
                     )
                     {
-                        IsOptimizedDuringBuild = texture.IsOptimizedDuringBuild
+                        IsOptimizedDuringBuild = texture.IsOptimizedDuringBuild,
+                        OriginalFileName = texture.OriginalFileName
                     };
 
                     if (texture.IsOptimizedDuringBuild && texture.OptimizeDetails != null)
@@ -576,6 +598,7 @@ namespace grzyClothTool.Controls
                 )
                 {
                     Audio = drawable.Audio,
+                    DisplayName = drawable.DisplayName,
                     EnableHighHeels = drawable.EnableHighHeels,
                     HighHeelsValue = drawable.HighHeelsValue,
                     EnableHairScale = drawable.EnableHairScale,

@@ -42,6 +42,27 @@ public class GTextureTests
         Assert.Equal("jbib_diff_012_c_uni", texture.DisplayName);
     }
 
+    [Fact]
+    public void OriginalFileName_RemainsInListAfterRenumbering_WithoutChangingBuildName()
+    {
+        var texture = CreateTexture(Guid.NewGuid(), 11, 0, 0, false, false);
+        texture.OriginalFileName = "mp_f_freemode_01_talecloth01^jbib_diff_005_a_uni.ytd";
+        texture.Number = 12;
+        texture.TxtNumber = 2;
+        Assert.Equal(texture.OriginalFileName, texture.ListDisplayName);
+        Assert.Equal("jbib_diff_012_c_uni", texture.GetBuildName());
+        Assert.Equal(texture.GetBuildName(), texture.DisplayName);
+    }
+
+    [Fact]
+    public void OlderProjects_UseOriginalPathWhenAvailable_WithoutShowingGuidAssets()
+    {
+        var texture = CreateTexture(Guid.NewGuid(), 11, 0, 0, false, false);
+        Assert.Equal(texture.DisplayName, texture.ListDisplayName);
+        texture.FilePath = @"C:\clothes\pack^jbib_diff_005_a_uni.ytd";
+        Assert.Equal("pack^jbib_diff_005_a_uni.ytd", texture.ListDisplayName);
+    }
+
     private static GTexture CreateTexture(Guid id, int typeNumeric, int number, int txtNumber, bool hasSkin, bool isProp)
     {
         return new GTexture(
