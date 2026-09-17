@@ -283,7 +283,7 @@ namespace grzyClothTool.Views
             }
         }
 
-        private static async Task AddDrawablesByDetectedGenderAsync(IEnumerable<string> filePaths, Enums.SexType? forcedGender = null, bool reviewImport = false)
+        private async Task AddDrawablesByDetectedGenderAsync(IEnumerable<string> filePaths, Enums.SexType? forcedGender = null, bool reviewImport = false, bool revealAdded = false)
         {
             var files = DrawableImportOrder.OrderFiles(filePaths).ToList();
             if (files.Count == 0)
@@ -297,6 +297,10 @@ namespace grzyClothTool.Views
                 LogHelper.Log("Adding drawables cancelled while resolving import settings.", LogType.Info);
                 return;
             }
+
+            var existingIds = revealAdded
+                ? MainWindow.AddonManager.Addons.SelectMany(addon => addon.Drawables).Select(drawable => drawable.Id).ToHashSet()
+                : null;
 
             var maleFiles = resolution.Genders
                 .Where(x => x.Value == Enums.SexType.male)
@@ -327,6 +331,7 @@ namespace grzyClothTool.Views
 
                 ProgressHelper.Stop("Added drawables in {0}", true);
                 SaveHelper.SetUnsavedChanges(true);
+                if (revealAdded) await RevealImportedDrawablesAsync(existingIds);
             }
             catch (Exception ex)
             {
@@ -417,6 +422,54 @@ namespace grzyClothTool.Views
                     Delete_SelectedDrawable(sender, new RoutedEventArgs());
                     break;
             }
+        }
+
+        private void ToggleDrawableGroups_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement { Tag: DrawableList list }) list.ToggleAllGroups();
+            e.Handled = true;
+        }
+
+        private async Task RevealImportedDrawablesAsync(HashSet<Guid> existingIds)
+        {
+            var target = MainWindow.AddonManager.Addons
+                .Select(addon => new
+                {
+                    Addon = addon,
+                    Drawables = addon.Drawables.Where(drawable => !existingIds.Contains(drawable.Id)).ToList()
+                })
+                .FirstOrDefault(result => result.Drawables.Count > 0);
+            if (target == null) return;
+
+            AddonTabControl.SelectedItem = target.Addon;
+            MainWindow.AddonManager.SelectedAddon = target.Addon;
+            Addon = target.Addon;
+            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
+            AddonTabControl.UpdateLayout();
+
+            var list = FindVisualChild<DrawableList>(AddonTabControl,
+                candidate => ReferenceEquals(candidate.ItemsSource, target.Addon.Drawables));
+            if (list == null)
+            {
+                await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+                AddonTabControl.UpdateLayout();
+                list = FindVisualChild<DrawableList>(AddonTabControl,
+                    candidate => ReferenceEquals(candidate.ItemsSource, target.Addon.Drawables));
+            }
+            if (list != null) await list.RevealAndSelectAsync(target.Drawables);
+        }
+
+        private static T FindVisualChild<T>(DependencyObject parent, Func<T, bool> predicate) where T : DependencyObject
+        {
+            if (parent == null) return null;
+            for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+                if (child is T match && predicate(match)) return match;
+                var nested = FindVisualChild(child, predicate);
+                if (nested != null) return nested;
+            }
+            return null;
         }
 
         private void DrawableList_DeleteRequested(object sender, EventArgs e)
@@ -724,7 +777,7 @@ namespace grzyClothTool.Views
                     return;
                 }
 
-                await AddDrawablesByDetectedGenderAsync(accessibleFiles, reviewImport: true);
+                await AddDrawablesByDetectedGenderAsync(accessibleFiles, reviewImport: true, revealAdded: true);
             }
             catch (Exception ex)
             {

@@ -14,6 +14,33 @@
 
 <UserControl.Resources>
 <local:GroupExpandedStateConverter x:Key="GroupExpandedStateConverter" />
+<local:GroupGenderCountConverter x:Key="GroupGenderCountConverter" />
+<DataTemplate x:Key="GenderCountsTemplate">
+    <StackPanel Orientation="Horizontal">
+        <Border Background="#dbeafe" BorderBrush="#93c5fd" BorderThickness="1" CornerRadius="8" Padding="5,1" ToolTip="Male">
+            <TextBlock Foreground="#1e40af" FontSize="10" FontWeight="SemiBold">
+                <TextBlock.Text>
+                    <MultiBinding Converter="{StaticResource GroupGenderCountConverter}" ConverterParameter="male">
+                        <Binding />
+                        <Binding Path="ItemCount" />
+                        <Binding Path="GenderCountsVersion" RelativeSource="{RelativeSource AncestorType={x:Type local:DrawableList}}" />
+                    </MultiBinding>
+                </TextBlock.Text>
+            </TextBlock>
+        </Border>
+        <Border Background="#fce7f3" BorderBrush="#f9a8d4" BorderThickness="1" CornerRadius="8" Padding="5,1" Margin="4,0,0,0" ToolTip="Female">
+            <TextBlock Foreground="#9d174d" FontSize="10" FontWeight="SemiBold">
+                <TextBlock.Text>
+                    <MultiBinding Converter="{StaticResource GroupGenderCountConverter}" ConverterParameter="female">
+                        <Binding />
+                        <Binding Path="ItemCount" />
+                        <Binding Path="GenderCountsVersion" RelativeSource="{RelativeSource AncestorType={x:Type local:DrawableList}}" />
+                    </MultiBinding>
+                </TextBlock.Text>
+            </TextBlock>
+        </Border>
+    </StackPanel>
+</DataTemplate>
     <converters:HexColorToBrushConverter x:Key="HexColorToBrushConverter" />
 
         <ContextMenu x:Key="SingleSelectionContextMenu">
@@ -199,13 +226,6 @@
                                                   Grid.Row="0"
                                                   Orientation="Horizontal"
                                                   VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Name, StringFormat='[{0}]'}"
-                                                      FontSize="10"
-                                                      FontFamily="Consolas"
-                                                      Foreground="{DynamicResource Brush500}"
-                                                      VerticalAlignment="Center"
-                                                      Margin="0,0,4,0"
-                                                      Visibility="{Binding HasDisplayName, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                             <TextBlock x:Name="NameText"
                                                       ToolTip="{Binding DisplayName}"
                                                       FontSize="11"
@@ -500,11 +520,13 @@
                                 <Setter.Value>
                                     <ControlTemplate TargetType="GroupItem">
                                         <StackPanel>
-                                            <Expander Margin="0,5,0,0" x:Name="GroupExpander">
+                                            <Expander Margin="0,5,0,0" x:Name="GroupExpander"
+                                                      Loaded="GroupExpander_Loaded" DataContextChanged="GroupExpander_DataContextChanged">
                                                 <Expander.IsExpanded>
                                                     <MultiBinding Converter="{StaticResource GroupExpandedStateConverter}" Mode="OneWay">
                                                         <Binding Path="Name" />
                                                         <Binding ElementName="MyDrawableList" />
+                                                        <Binding Path="GroupExpansionVersion" ElementName="MyDrawableList" />
                                                     </MultiBinding>
                                                 </Expander.IsExpanded>
                                                 <Expander.Style>
@@ -608,6 +630,7 @@
                                                                 
                                                                 <Border Grid.Column="3"
                                                                        x:Name="CountPill"
+                                                                       Visibility="Collapsed"
                                                                        Background="#dbeafe"
                                                                        BorderBrush="{DynamicResource Brush300}"
                                                                        BorderThickness="1"
@@ -621,6 +644,7 @@
                                                                              FontWeight="SemiBold"
                                                                              Foreground="#1e40af" />
                                                                 </Border>
+                                                                <ContentControl Grid.Column="3" Content="{Binding}" ContentTemplate="{StaticResource GenderCountsTemplate}" Margin="6,0,0,0" VerticalAlignment="Center" />
                                                             </Grid>
                                                         </Border>
                                                     </Grid>
@@ -770,11 +794,13 @@
                                 <Setter.Value>
                                     <ControlTemplate TargetType="GroupItem">
                                         <StackPanel>
-                                            <Expander Margin="20,2,0,0" x:Name="InnerGroupExpander">
+                                            <Expander Margin="20,2,0,0" x:Name="InnerGroupExpander"
+                                                      Loaded="GroupExpander_Loaded" DataContextChanged="GroupExpander_DataContextChanged">
                                                 <Expander.IsExpanded>
                                                     <MultiBinding Converter="{StaticResource GroupExpandedStateConverter}" Mode="OneWay">
                                                         <Binding Path="Name" />
                                                         <Binding ElementName="MyDrawableList" />
+                                                        <Binding Path="GroupExpansionVersion" ElementName="MyDrawableList" />
                                                     </MultiBinding>
                                                 </Expander.IsExpanded>
                                                 <Expander.Style>
@@ -874,6 +900,7 @@
 
                                                                 <Border Grid.Column="3"
                                                                        x:Name="InnerCountPill"
+                                                                       Visibility="Collapsed"
                                                                        Background="{DynamicResource Brush150}"
                                                                        BorderBrush="{DynamicResource Brush300}"
                                                                        BorderThickness="1"
@@ -887,6 +914,7 @@
                                                                              FontWeight="SemiBold"
                                                                              Foreground="{DynamicResource Brush600}" />
                                                                 </Border>
+                                                                <ContentControl Grid.Column="3" Content="{Binding}" ContentTemplate="{StaticResource GenderCountsTemplate}" Margin="6,0,0,0" VerticalAlignment="Center" />
                                                             </Grid>
                                                         </Border>
                                                     </Grid>

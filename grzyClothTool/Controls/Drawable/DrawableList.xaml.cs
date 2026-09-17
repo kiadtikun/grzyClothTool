@@ -72,6 +72,8 @@ namespace grzyClothTool.Controls
 
         public object DrawableListSelectedValue => MyListBox.SelectedValue;
 
+        public IReadOnlyList<GDrawable> SelectedItems => MyListBox.SelectedItems.Cast<GDrawable>().ToList();
+
         public static readonly DependencyProperty GroupByDrawableTypeProperty =
             DependencyProperty.Register(nameof(GroupByDrawableType), typeof(bool), typeof(DrawableList),
                 new PropertyMetadata(false, (d, _) =>
@@ -101,15 +103,107 @@ namespace grzyClothTool.Controls
         private List<GDrawable> _pendingSelection;
         private static readonly ConditionalWeakTable<ObservableCollection<GDrawable>, Dictionary<string, bool>> GroupExpandedStates = new();
         private bool _isBatchUpdating = false;
+        private bool _isUpdatingGroupExpansion;
 
         public bool IsPrimaryGroupingByTypeName => GroupByDrawableType || SettingsHelper.Instance.DrawableGroupingMode == GroupingMode.ByType;
+
+        public int GroupExpansionVersion { get; private set; }
+        public int GenderCountsVersion { get; private set; }
+
+        public bool HasExpandedGroups => DrawablesView?.Groups?.OfType<CollectionViewGroup>()
+            .Any(group => group.Name is string name && GetGroupExpandedState(name)) == true;
+
+        public void ToggleAllGroups() => SetAllGroupsExpanded(!HasExpandedGroups);
+
+        public Task RevealAndSelectAsync(IEnumerable<GDrawable> drawables)
+        {
+            var items = drawables.Where(item => ItemsSource?.Contains(item) == true).Distinct().ToList();
+            if (items.Count == 0) return Task.CompletedTask;
+
+            SearchText = string.Empty;
+            var states = GroupExpandedStates.GetOrCreateValue(ItemsSource);
+            foreach (var typeName in items.Select(item => item.TypeName).Distinct(StringComparer.OrdinalIgnoreCase))
+                states[typeName] = true;
+
+            GroupExpansionVersion++;
+            OnPropertyChanged(nameof(GroupExpansionVersion));
+            OnPropertyChanged(nameof(HasExpandedGroups));
+            DrawablesView?.Refresh();
+
+            return Dispatcher.InvokeAsync(() =>
+            {
+                MyListBox.SelectedItems.Clear();
+                foreach (var item in items) MyListBox.SelectedItems.Add(item);
+                MyListBox.ScrollIntoView(items[0]);
+                MyListBox.UpdateLayout();
+            }, System.Windows.Threading.DispatcherPriority.Loaded).Task;
+        }
+
+        public void SetAllGroupsExpanded(bool expanded)
+        {
+            if (ItemsSource == null) return;
+            var states = GroupExpandedStates.GetOrCreateValue(ItemsSource);
+            _isUpdatingGroupExpansion = true;
+            try
+            {
+                states.Clear();
+                // Default applies to filtered-out or not-yet-realized groups too.
+                states[string.Empty] = expanded;
+                // Individual header toggles can replace the one-way IsExpanded binding.
+                // Restore it on every realized group, not just those still bound.
+                foreach (var expander in FindGroupExpanders(MyListBox).ToArray())
+                    RestoreGroupExpansionBinding(expander);
+                GroupExpansionVersion++;
+                OnPropertyChanged(nameof(GroupExpansionVersion));
+            }
+            finally { _isUpdatingGroupExpansion = false; }
+            OnPropertyChanged(nameof(HasExpandedGroups));
+        }
+
+        private static IEnumerable<Expander> FindGroupExpanders(DependencyObject parent)
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is Expander expander && expander.DataContext is CollectionViewGroup)
+                    yield return expander;
+                foreach (var nested in FindGroupExpanders(child)) yield return nested;
+            }
+        }
+
+        private void RestoreGroupExpansionBinding(Expander expander)
+        {
+            if (expander.DataContext is not CollectionViewGroup group) return;
+            var binding = new MultiBinding { Converter = new GroupExpandedStateConverter(), Mode = BindingMode.OneWay };
+            binding.Bindings.Add(new Binding(nameof(CollectionViewGroup.Name)) { Source = group });
+            binding.Bindings.Add(new Binding { Source = this });
+            binding.Bindings.Add(new Binding(nameof(GroupExpansionVersion)) { Source = this });
+            BindingOperations.SetBinding(expander, Expander.IsExpandedProperty, binding);
+        }
+
+        private void GroupExpander_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is Expander expander) RestoreGroupExpansionBinding(expander);
+        }
+
+        private void GroupExpander_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            if (sender is Expander expander) RestoreGroupExpansionBinding(expander);
+        }
+
+        private void RefreshGenderCounts()
+        {
+            GenderCountsVersion++;
+            OnPropertyChanged(nameof(GenderCountsVersion));
+        }
 
         public DrawableList()
         {
             InitializeComponent();
 
             MyListBox.MouseLeave += MyListBox_MouseLeave;
-            MyListBox.Loaded += MyListBox_Loaded;
+            MyListBox.AddHandler(Expander.ExpandedEvent, new RoutedEventHandler(Expander_StateChanged));
+            MyListBox.AddHandler(Expander.CollapsedEvent, new RoutedEventHandler(Expander_StateChanged));
 
             SettingsHelper.Instance.PropertyChanged += OnSettingsPropertyChanged;
         }
@@ -128,20 +222,16 @@ namespace grzyClothTool.Controls
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
-        private void MyListBox_Loaded(object sender, RoutedEventArgs e)
-        {
-            MyListBox.AddHandler(Expander.ExpandedEvent, new RoutedEventHandler(Expander_StateChanged));
-            MyListBox.AddHandler(Expander.CollapsedEvent, new RoutedEventHandler(Expander_StateChanged));
-        }
-
         private void Expander_StateChanged(object sender, RoutedEventArgs e)
         {
+            if (_isUpdatingGroupExpansion) return;
             if (e.OriginalSource is Expander expander && expander.DataContext is CollectionViewGroup group)
             {
                 var groupName = group.Name as string;
                 if (!string.IsNullOrEmpty(groupName) && ItemsSource != null)
                 {
                     GroupExpandedStates.GetOrCreateValue(ItemsSource)[groupName] = expander.IsExpanded;
+                    OnPropertyChanged(nameof(HasExpandedGroups));
                 }
             }
         }
@@ -151,7 +241,10 @@ namespace grzyClothTool.Controls
             if (string.IsNullOrEmpty(groupName))
                 return true;
                 
-            return ItemsSource == null || !GroupExpandedStates.GetOrCreateValue(ItemsSource).TryGetValue(groupName, out bool isExpanded) || isExpanded;
+            if (ItemsSource == null) return true;
+            var states = GroupExpandedStates.GetOrCreateValue(ItemsSource);
+            return states.TryGetValue(groupName, out var expanded) ? expanded
+                : !states.TryGetValue(string.Empty, out var defaultExpanded) || defaultExpanded;
         }
 
         private void MyListBox_MouseLeave(object sender, MouseEventArgs e)
@@ -169,6 +262,10 @@ namespace grzyClothTool.Controls
                 drawableList.UnsubscribeFromPropertyChanges(e.OldValue as ObservableCollection<GDrawable>);
                 drawableList.SubscribeToPropertyChanges(e.NewValue as ObservableCollection<GDrawable>);
                 drawableList.SetupGrouping();
+                drawableList.GroupExpansionVersion++;
+                drawableList.OnPropertyChanged(nameof(GroupExpansionVersion));
+                drawableList.RefreshGenderCounts();
+                drawableList.OnPropertyChanged(nameof(HasExpandedGroups));
             }
         }
 
@@ -199,6 +296,8 @@ namespace grzyClothTool.Controls
 
         private void ItemsSource_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
+            RefreshGenderCounts();
+            OnPropertyChanged(nameof(HasExpandedGroups));
             if (e.NewItems != null)
             {
                 foreach (GDrawable drawable in e.NewItems)
@@ -218,6 +317,7 @@ namespace grzyClothTool.Controls
 
         private void Drawable_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == nameof(GDrawable.Sex)) RefreshGenderCounts();
             if (e.PropertyName == nameof(GDrawable.Group))
             {
                 if (_isBatchUpdating)
@@ -1191,6 +1291,23 @@ namespace grzyClothTool.Controls
 
             return x.Length.CompareTo(y.Length);
         }
+    }
+
+    public class GroupGenderCountConverter : IMultiValueConverter
+    {
+        public static int Count(CollectionViewGroup group, Enums.SexType sex) => group.Items.Sum(item =>
+            item is CollectionViewGroup child ? Count(child, sex) : item is GDrawable drawable && drawable.Sex == sex ? 1 : 0);
+
+        public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+        {
+            var male = parameter as string == "male";
+            var count = values.Length > 0 && values[0] is CollectionViewGroup group
+                ? Count(group, male ? Enums.SexType.male : Enums.SexType.female) : 0;
+            return count.ToString(culture);
+        }
+
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>
+            throw new NotSupportedException();
     }
 
     public class GroupExpandedStateConverter : IMultiValueConverter

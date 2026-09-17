@@ -81,8 +81,9 @@ mc:Ignorable="d">
             <RowDefinition Height="50"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="320"/>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="320" MinWidth="240"/>
+            <ColumnDefinition Width="6"/>
+            <ColumnDefinition Width="*" MinWidth="420"/>
         </Grid.ColumnDefinitions>
         <Grid Grid.Column="0" Grid.Row="0" Grid.RowSpan="2">
             <Grid.RowDefinitions>
@@ -169,6 +170,33 @@ mc:Ignorable="d">
                                                       FontWeight="SemiBold"
                                                       Foreground="{DynamicResource Brush900}"
                                                       VerticalAlignment="Center" />
+                                            <Button Width="24" Height="22" Margin="6,0,0,0"
+                                                    Tag="{Binding ElementName=DrawableListControl}"
+                                                    Click="ToggleDrawableGroups_Click"
+                                                    AutomationProperties.AutomationId="ToggleAllDrawableGroups">
+                                                <Button.Style>
+                                                    <Style TargetType="Button">
+                                                        <Setter Property="ToolTip" Value="Expand all categories" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasExpandedGroups, ElementName=DrawableListControl}" Value="True">
+                                                                <Setter Property="ToolTip" Value="Collapse all categories" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                                <icons:MaterialIcon Width="18" Height="18">
+                                                    <icons:MaterialIcon.Style>
+                                                        <Style TargetType="icons:MaterialIcon">
+                                                            <Setter Property="Kind" Value="ChevronDown" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasExpandedGroups, ElementName=DrawableListControl}" Value="True">
+                                                                    <Setter Property="Kind" Value="ChevronUp" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </icons:MaterialIcon.Style>
+                                                </icons:MaterialIcon>
+                                            </Button>
                                         </StackPanel>
                                         
                                         <Border Grid.Column="1"
@@ -299,7 +327,18 @@ mc:Ignorable="d">
             </Border>
         </Grid>
 
-        <Grid Grid.Column="1" Grid.Row="0">
+        <GridSplitter Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
+                      Width="6"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      ResizeDirection="Columns"
+                      ResizeBehavior="PreviousAndNext"
+                      Background="{DynamicResource Brush250}"
+                      Cursor="SizeWE"
+                      ToolTip="Drag to resize Drawables"
+                      AutomationProperties.AutomationId="DrawablesPanelSplitter" />
+
+        <Grid Grid.Column="2" Grid.Row="0">
             <c:SelectedDrawable x:Name="SelDrawable" 
                                TextureListSelectedValueChanged="SelectedDrawable_TextureChanged" 
                                SelectedDrawableUpdated="SelectedDrawable_Updated" 
@@ -307,7 +346,7 @@ mc:Ignorable="d">
                                SelectedTxt="{Binding SelectedAddon.SelectedTexture}" />
         </Grid>
 
-        <Border Grid.Column="1" Grid.Row="1"
+        <Border Grid.Column="2" Grid.Row="1"
                Background="{DynamicResource Brush100}"
                BorderBrush="{DynamicResource Brush250}"
                BorderThickness="0,1,0,0"
