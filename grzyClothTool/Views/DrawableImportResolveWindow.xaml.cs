@@ -46,7 +46,7 @@ namespace grzyClothTool.Views
 
         public string GenderText => HasGender ? GetGenderDisplayName(Gender.Value) : "Gender not set";
         public string DrawableText => HasDrawableType
-            ? $"{(IsProp == true ? "Prop" : "Component")} / {DrawableTypeName}"
+            ? $"{(IsProp == true ? "Prop" : "Component")} / {DrawableTypeNames.GetLabel(DrawableTypeName)}"
             : "Properties not set";
 
         public DrawableImportResolveItem(
@@ -75,6 +75,8 @@ namespace grzyClothTool.Views
 
         public void SetDrawableType(bool isProp, string drawableTypeName)
         {
+            var codes = isProp ? EnumHelper.GetPropTypeList() : EnumHelper.GetDrawableTypeList();
+            drawableTypeName = codes.First(code => code == drawableTypeName || DrawableTypeNames.GetLabel(code) == drawableTypeName);
             IsProp = isProp;
             DrawableTypeName = drawableTypeName;
             DrawableType = EnumHelper.GetValue(drawableTypeName, isProp);
@@ -519,8 +521,8 @@ namespace grzyClothTool.Views
         {
             DrawableTypes = assetType switch
             {
-                "Component" => EnumHelper.GetDrawableTypeList(),
-                "Prop" => EnumHelper.GetPropTypeList(),
+                "Component" => EnumHelper.GetDrawableTypeList().Select(DrawableTypeNames.GetLabel).ToList(),
+                "Prop" => EnumHelper.GetPropTypeList().Select(DrawableTypeNames.GetLabel).ToList(),
                 _ => [],
             };
         }
@@ -544,7 +546,7 @@ namespace grzyClothTool.Views
                 var assetType = item.IsProp == true ? "Prop" : "Component";
                 SelectedAssetType = assetType;
                 SetDrawableTypeOptions(assetType);
-                SelectedDrawableType = item.DrawableTypeName;
+                SelectedDrawableType = DrawableTypeNames.GetLabel(item.DrawableTypeName);
             }
         }
 

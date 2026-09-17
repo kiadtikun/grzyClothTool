@@ -818,8 +818,7 @@
                                                                 <ColumnDefinition Width="*" />
                                                                 <ColumnDefinition Width="Auto" />
                                                                 <ColumnDefinition Width="Auto" />
-                                                                <ColumnDefinition Width="56" />
-                                                                <ColumnDefinition Width="64" />
+                                                                <ColumnDefinition Width="Auto" />
                                                             </Grid.ColumnDefinitions>
 
                                                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0">
@@ -942,7 +941,7 @@
                                                                 </TextBlock.Style>
                                                             </TextBlock>
 
-                                                            <Border Grid.Column="5"
+                                                            <Border Grid.Column="5" HorizontalAlignment="Right" MouseEnter="TextureThumbnail_MouseEnter" MouseLeave="TextureThumbnail_MouseLeave" Unloaded="TextureThumbnail_MouseLeave"
                                                                     Width="28"
                                                                     Height="28"
                                                                     BorderBrush="{DynamicResource Brush300}"
@@ -956,21 +955,6 @@
                                                                     </Image.Clip>
                                                                 </Image>
                                                             </Border>
-
-                                                            <Button Grid.Column="6"
-                                                                    Content="Preview"
-                                                                    FontSize="11"
-                                                                    Margin="0"
-                                                                    Padding="8,4"
-                                                                    Width="60"
-                                                                    Height="22"
-                                                                    BorderThickness="0"
-                                                                    Style="{StaticResource RoundedButton}"
-                                                                    Background="{DynamicResource Brush300}"
-                                                                    BorderBrush="{DynamicResource Brush300}"
-                                                                    Foreground="{DynamicResource Brush950}"
-                                                                    Click="TexturePreview_Click"
-                                                                    IsEnabled="{Binding IsPreviewDisabled, Converter={StaticResource InverseBooleanConverter}}" />
 
                                                             <Grid.ContextMenu>
                                                                 <ContextMenu>
@@ -1063,8 +1047,7 @@
                                                                 <ColumnDefinition Width="*" />
                                                                 <ColumnDefinition Width="Auto" />
                                                                 <ColumnDefinition Width="Auto" />
-                                                                <ColumnDefinition Width="56" />
-                                                                <ColumnDefinition Width="64" />
+                                                                <ColumnDefinition Width="Auto" />
                                                             </Grid.ColumnDefinitions>
 
                                                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0">
@@ -1173,7 +1156,7 @@
                                                                 </TextBlock.Text>
                                                             </TextBlock>
 
-                                                            <Border Grid.Column="5"
+                                                            <Border Grid.Column="5" HorizontalAlignment="Right" MouseEnter="TextureThumbnail_MouseEnter" MouseLeave="TextureThumbnail_MouseLeave" Unloaded="TextureThumbnail_MouseLeave"
                                                                     Width="28"
                                                                     Height="28"
                                                                     BorderBrush="{DynamicResource Brush300}"
@@ -1216,20 +1199,6 @@
                                                                     </icons:MaterialIcon>
                                                                 </Grid>
                                                             </Border>
-
-                                                            <Button Grid.Column="6"
-                                                                    Content="Preview"
-                                                                    FontSize="11"
-                                                                    Margin="0"
-                                                                    Padding="8,4"
-                                                                    Width="60"
-                                                                    Height="22"
-                                                                    BorderThickness="0"
-                                                                    Style="{StaticResource RoundedButton}"
-                                                                    Background="{DynamicResource Brush300}"
-                                                                    BorderBrush="{DynamicResource Brush300}"
-                                                                    Foreground="{DynamicResource Brush950}"
-                                                                    Click="EmbeddedTexturePreview_Click" />
 
                                                             <Grid.ContextMenu>
                                                                 <ContextMenu>

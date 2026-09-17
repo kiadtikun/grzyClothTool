@@ -32,9 +32,12 @@ public class DrawableImportUiTests
             ((CustomButton)window.FindName("ApplyGenderButton")).RaiseEvent(new RoutedEventArgs(CustomButton.BtnClickEvent));
             Assert.Equal(Enums.SexType.male, window.Items[0].Gender);
             Assert.True(window.Items[0].IsSelected);
-            window.SelectedDrawableType = "lowr";
+            Assert.Contains("Accessories [teef]", window.DrawableTypes);
+            Assert.Contains("Hair Styles [hair]", window.DrawableTypes);
+            window.SelectedDrawableType = "Legs [lowr]";
             ((CustomButton)window.FindName("ApplyDrawableButton")).RaiseEvent(new RoutedEventArgs(CustomButton.BtnClickEvent));
             Assert.Equal(4, window.Items[0].DrawableType);
+            Assert.Equal("lowr", window.Items[0].DrawableTypeName);
             Assert.True(window.IsSubmitEnabled);
             window.Close();
 
@@ -73,6 +76,10 @@ public class DrawableImportUiTests
             Assert.NotEmpty(expanders);
             Assert.All(expanders, expander => Assert.False(expander.IsExpanded));
             var labels = Descendants<System.Windows.Controls.TextBlock>(list).Select(t => t.Text).ToArray();
+            Assert.Contains("Tops [jbib]", labels);
+            Assert.Contains("Legs [lowr]", labels);
+            Assert.All(Descendants<Material.Icons.WPF.MaterialIcon>(list).Where(icon => icon.Name == "GroupIcon"),
+                icon => Assert.Equal(Visibility.Collapsed, icon.Visibility));
             Assert.True(labels.Count(label => label == "1") >= 2);
             Assert.DoesNotContain(labels, label => label.Contains('♂') || label.Contains('♀'));
             Assert.False(list.GetGroupExpandedState("jbib"));
@@ -120,6 +127,18 @@ public class DrawableImportUiTests
             list.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
             list.UpdateLayout();
             Assert.All(Descendants<System.Windows.Controls.Expander>(list), expander => Assert.True(expander.IsExpanded));
+            foreach (var scroll in Descendants<System.Windows.Controls.ScrollViewer>(list)) scroll.ScrollToEnd();
+            list.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+            list.UpdateLayout();
+            var connectors = Descendants<System.Windows.Controls.Border>(list)
+                .Where(border => border.Name == "GroupConnector").ToArray();
+            Assert.NotEmpty(connectors);
+            Assert.All(connectors, border => Assert.Equal(Visibility.Visible, border.Visibility));
+            foreach (var scroll in Descendants<System.Windows.Controls.ScrollViewer>(list)) scroll.ScrollToTop();
+            list.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+            list.UpdateLayout();
+            Assert.All(Descendants<System.Windows.Controls.Border>(list).Where(border => border.Name == "GroupConnector"),
+                border => Assert.Equal(Visibility.Visible, border.Visibility));
         });
     }
 }

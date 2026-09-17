@@ -185,9 +185,9 @@
                 <Grid x:Name="DrawableControls"
                       Visibility="{Binding DrawableControlsVisibility}">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="210"/>
+                        <ColumnDefinition Width="170"/>
                         <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="210"/>
+                        <ColumnDefinition Width="250"/>
                         <ColumnDefinition Width="10"/>
                         <ColumnDefinition Width="170"/>
                     </Grid.ColumnDefinitions>

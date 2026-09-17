@@ -1,4 +1,4 @@
-﻿using CodeWalker.Utils;
+using CodeWalker.Utils;
 using grzyClothTool.Constants;
 using grzyClothTool.Extensions;
 using grzyClothTool.Helpers;
@@ -165,179 +165,115 @@ namespace grzyClothTool.Controls
         }
 
 
-        private void TexturePreview_Click(object sender, RoutedEventArgs e)
+        private Popup _textureHoverPreview;
+        private FrameworkElement _textureHoverTarget;
+        private int _textureHoverVersion;
+
+        private async void TextureThumbnail_MouseEnter(object sender, MouseEventArgs e)
         {
+            if (sender is not FrameworkElement target) return;
+            CloseTextureHoverPreview();
+            _textureHoverTarget = target;
+            var version = _textureHoverVersion;
+            var source = target.DataContext;
             try
             {
-                Button btn = sender as Button;
-                GTexture gtxt = (GTexture)btn.DataContext;
-
-                var textureListBox = FindTextureListBox(this);
-                textureListBox.SelectedIndex = gtxt.TxtNumber;
-
-                MagickImage img = ImgHelper.GetImage(gtxt.FullFilePath);
-                if (img == null)
+                (BitmapSource Image, string Caption) preview;
+                if (source is GTexture texture && !texture.IsPreviewDisabled)
                 {
-                    return;
+                    var path = texture.FullFilePath;
+                    var name = texture.ListDisplayName;
+                    preview = await Task.Run(() =>
+                    {
+                        using var img = ImgHelper.GetImage(path);
+                        return CreateTextureHoverImage(img, name);
+                    });
                 }
-
-                int w = (int)img.Width;
-                int h = (int)img.Height;
-                byte[] pixels = img.ToByteArray(MagickFormat.Bgra);
-
-                Bitmap bitmap = new(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                BitmapData bitmapData = bitmap.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, bitmap.PixelFormat);
-                Marshal.Copy(pixels, 0, bitmapData.Scan0, pixels.Length);
-                bitmap.UnlockBits(bitmapData);
-
-                System.Windows.Controls.Image imageControl = new() { Stretch = Stretch.Uniform, Width = 400, Height = 300 };
-                BitmapSource bitmapSource = BitmapSource.Create(
-                    bitmap.Width,
-                    bitmap.Height,
-                    bitmap.HorizontalResolution,
-                    bitmap.VerticalResolution,
-                    PixelFormats.Bgra32,
-                    null,
-                    pixels,
-                    bitmap.Width * 4
-                );
-
-                imageControl.Source = bitmapSource;
-
-                TextBlock textBlock = new()
+                else if (source is GTextureEmbedded embedded)
                 {
-                    Text = $"{gtxt.DisplayName} ({w}x{h})",
+                    await embedded.EnsureTextureDataLoadedAsync();
+                    if (version != _textureHoverVersion) return;
+                    var data = embedded.DisplayTextureData;
+                    if (data?.Data?.FullData == null || data.Data.FullData.Length == 0) return;
+                    var name = $"({embedded.Details.Type}) {embedded.Details.Name}";
+                    preview = await Task.Run(() =>
+                    {
+                        using var img = new MagickImage(DDSIO.GetDDSFile(data));
+                        return CreateTextureHoverImage(img, name);
+                    });
+                }
+                else return;
+
+                // Async decoding must not reopen a preview after the pointer or selection moves.
+                if (version != _textureHoverVersion || !target.IsMouseOver || !target.IsLoaded
+                    || !ReferenceEquals(source, target.DataContext) || preview.Image == null) return;
+
+                var panel = new StackPanel();
+                panel.Children.Add(new TextBlock
+                {
+                    Text = preview.Caption,
+                    TextWrapping = TextWrapping.Wrap,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(5)
-                };
-
-                StackPanel stackPanel = new();
-                stackPanel.Children.Add(textBlock);
-                stackPanel.Children.Add(imageControl);
-
-                Border border = new()
+                    Foreground = System.Windows.Media.Brushes.Black,
+                    Margin = new Thickness(6)
+                });
+                panel.Children.Add(new System.Windows.Controls.Image
                 {
-                    CornerRadius = new CornerRadius(15),
-                    BorderThickness = new Thickness(2),
-                    BorderBrush = System.Windows.Media.Brushes.Black,
-
-                    Background = System.Windows.Media.Brushes.White,
-                    Child = stackPanel
-                };
-
-                Popup popup = new()
+                    Source = preview.Image, Stretch = Stretch.Uniform, Width = 400, Height = 300
+                });
+                _textureHoverPreview = new Popup
                 {
-                    Width = 400,
-                    Height = 350,
-                    Placement = PlacementMode.Mouse,
-                    StaysOpen = false,
-                    Child = border,
+                    PlacementTarget = target,
+                    Placement = PlacementMode.Left,
+                    HorizontalOffset = -8,
+                    StaysOpen = true,
                     AllowsTransparency = true,
-
+                    IsHitTestVisible = false,
+                    Child = new Border
+                    {
+                        Width = 420,
+                        Padding = new Thickness(8),
+                        CornerRadius = new CornerRadius(10),
+                        BorderThickness = new Thickness(1),
+                        BorderBrush = System.Windows.Media.Brushes.Gray,
+                        Background = System.Windows.Media.Brushes.White,
+                        Child = panel
+                    },
                     IsOpen = true
-                };
-                popup.MouseMove += (s, args) =>
-                {
-                    popup.IsOpen = false;
-                };
-
-                popup.Closed += (s, args) =>
-                {
-                    bitmap.Dispose();
                 };
             }
             catch (Exception ex)
             {
                 LogHelper.Log($"Error displaying texture preview: {ex.Message}", LogType.Error);
             }
-
         }
 
-        private async void EmbeddedTexturePreview_Click(object sender, RoutedEventArgs e)
+        private static (BitmapSource Image, string Caption) CreateTextureHoverImage(MagickImage img, string name)
         {
-            try
+            if (img == null) return (null, string.Empty);
+            var caption = $"{name} ({img.Width}x{img.Height})";
+            img.Resize(new MagickGeometry(400, 300) { Greater = true });
+            var pixels = img.ToByteArray(MagickFormat.Bgra);
+            var bitmap = BitmapSource.Create((int)img.Width, (int)img.Height, 96, 96,
+                PixelFormats.Bgra32, null, pixels, (int)img.Width * 4);
+            bitmap.Freeze();
+            return (bitmap, caption);
+        }
+
+        private void TextureThumbnail_MouseLeave(object sender, RoutedEventArgs e)
+        {
+            if (ReferenceEquals(sender, _textureHoverTarget)) CloseTextureHoverPreview();
+        }
+
+        private void CloseTextureHoverPreview()
+        {
+            _textureHoverVersion++;
+            _textureHoverTarget = null;
+            if (_textureHoverPreview != null)
             {
-                Button btn = sender as Button;
-
-                if (btn.DataContext is not GTextureEmbedded embeddedTexture)
-                    return;
-
-                await embeddedTexture.EnsureTextureDataLoadedAsync();
-
-                var textureData = embeddedTexture.DisplayTextureData;
-                if (textureData?.Data?.FullData == null || textureData.Data.FullData.Length == 0)
-                    return;
-
-                var dds = DDSIO.GetDDSFile(textureData);
-                using MagickImage img = new(dds);
-                
-                int w = (int)img.Width;
-                int h = (int)img.Height;
-                byte[] pixels = img.ToByteArray(MagickFormat.Bgra);
-
-                Bitmap bitmap = new(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                BitmapData bitmapData = bitmap.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, bitmap.PixelFormat);
-                Marshal.Copy(pixels, 0, bitmapData.Scan0, pixels.Length);
-                bitmap.UnlockBits(bitmapData);
-
-                System.Windows.Controls.Image imageControl = new() { Stretch = Stretch.Uniform, Width = 400, Height = 300 };
-                BitmapSource bitmapSource = BitmapSource.Create(
-                    bitmap.Width,
-                    bitmap.Height,
-                    96, 96,
-                    PixelFormats.Bgra32,
-                    null,
-                    pixels,
-                    bitmap.Width * 4
-                );
-
-                imageControl.Source = bitmapSource;
-
-                var statusText = embeddedTexture.HasReplacement ? " - REPLACEMENT" : " - Embedded";
-                TextBlock textBlock = new()
-                {
-                    Text = $"({embeddedTexture.Details.Type}) {embeddedTexture.Details.Name} ({w}x{h}){statusText}",
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(5)
-                };
-
-                StackPanel stackPanel = new();
-                stackPanel.Children.Add(textBlock);
-                stackPanel.Children.Add(imageControl);
-
-                Border border = new()
-                {
-                    CornerRadius = new CornerRadius(15),
-                    BorderThickness = new Thickness(2),
-                    BorderBrush = System.Windows.Media.Brushes.Black,
-                    Background = System.Windows.Media.Brushes.White,
-                    Child = stackPanel
-                };
-
-                Popup popup = new()
-                {
-                    Width = 400,
-                    Height = 350,
-                    Placement = PlacementMode.Mouse,
-                    StaysOpen = false,
-                    Child = border,
-                    AllowsTransparency = true,
-                    IsOpen = true
-                };
-                
-                popup.MouseMove += (s, args) =>
-                {
-                    popup.IsOpen = false;
-                };
-
-                popup.Closed += (s, args) =>
-                {
-                    bitmap.Dispose();
-                };
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Log($"Error displaying embedded texture preview: {ex.Message}", LogType.Error);
+                _textureHoverPreview.IsOpen = false;
+                _textureHoverPreview.Child = null;
+                _textureHoverPreview = null;
             }
         }
 

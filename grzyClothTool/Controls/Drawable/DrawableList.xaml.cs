@@ -511,6 +511,7 @@ namespace grzyClothTool.Controls
         {
             yield return drawable.Name;
             yield return drawable.DisplayName;
+            yield return drawable.ListDisplayName;
             yield return drawable.TypeName;
             yield return drawable.Number.ToString();
             yield return drawable.DisplayNumber;
@@ -1338,8 +1339,8 @@ namespace grzyClothTool.Controls
 
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            // If the value is a GroupItem, then this item is inside a group
-            return value is GroupItem groupItem && groupItem.DataContext is CollectionViewGroup group && group.Name != null;
+            // Observe the group's name directly so recycled containers update the connector.
+            return value != null && value != DependencyProperty.UnsetValue;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

@@ -1,4 +1,4 @@
-﻿using CodeWalker.GameFiles;
+using CodeWalker.GameFiles;
 using grzyClothTool.Constants;
 using grzyClothTool.Controls;
 using grzyClothTool.Extensions;
@@ -48,6 +48,7 @@ public class GDrawable : INotifyPropertyChanged
             {
                 _filePath = value;
                 OnPropertyChanged();
+                RefreshFileSize();
             }
         }
     }
@@ -101,6 +102,40 @@ public class GDrawable : INotifyPropertyChanged
     [JsonIgnore]
     public bool HasDisplayName => !string.IsNullOrEmpty(_displayName);
 
+    [JsonIgnore]
+    public long? FileSizeBytes { get; private set; }
+
+    [JsonIgnore]
+    public string ListDisplayName
+    {
+        get
+        {
+            var label = $"{Number % GlobalConstants.MAX_DRAWABLES_IN_ADDON} {DrawableTypeNames.GetName(TypeName)}";
+            return FileSizeBytes is long bytes
+                ? label + " " + (bytes / 1024d).ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + "KB"
+                : label;
+        }
+    }
+
+    private void RefreshFileSize()
+    {
+        // Read metadata once when loading/replacing an asset, never during list rendering.
+        FileSizeBytes = null;
+        if (!string.IsNullOrEmpty(FilePath))
+        {
+            try
+            {
+                var file = new FileInfo(FullFilePath);
+                if (file.Exists) FileSizeBytes = file.Length;
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (ArgumentException) { }
+        }
+        OnPropertyChanged(nameof(FileSizeBytes));
+        OnPropertyChanged(nameof(ListDisplayName));
+    }
+
     private bool _isReserved;
     public virtual bool IsReserved
     {
@@ -146,6 +181,7 @@ public class GDrawable : INotifyPropertyChanged
 
             SetDrawableName();
             OnPropertyChanged();
+            OnPropertyChanged(nameof(ListDisplayName));
         }
     }
 
@@ -194,6 +230,7 @@ public class GDrawable : INotifyPropertyChanged
                 _number = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(DisplayNumber));
+                OnPropertyChanged(nameof(ListDisplayName));
                 // Update Name when Number changes (e.g., during reordering)
                 SetDrawableName();
             }
@@ -541,6 +578,7 @@ public class GDrawable : INotifyPropertyChanged
     {
         try
         {
+            RefreshFileSize();
             if (File.Exists(FullFilePath))
             {
                 var result = await LoadDrawableDetailsWithConcurrencyControl();

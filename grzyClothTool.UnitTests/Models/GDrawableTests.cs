@@ -9,6 +9,33 @@ namespace grzyClothTool.UnitTests.Models;
 public class GDrawableTests
 {
     [Fact]
+    public void ListDisplayName_ShowsNumberComponentAndSize_WithoutChangingSourceOrExportNames()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.ydd");
+        try
+        {
+            File.WriteAllBytes(path, new byte[103045]);
+            var drawable = new GDrawable(Guid.NewGuid(), null!, SexType.female, false, 7, 0, false, []);
+            drawable.DisplayName = "original^teef_005_u.ydd";
+            drawable.FilePath = path;
+            Assert.Equal("0 Accessories 100.63KB", drawable.ListDisplayName);
+            Assert.Equal("original^teef_005_u.ydd", drawable.DisplayName);
+            Assert.Equal("teef_000_u", drawable.Name);
+            drawable.Number = 1;
+            Assert.Equal("1 Accessories 100.63KB", drawable.ListDisplayName);
+            drawable.TypeNumeric = 2;
+            drawable.TypeName = "hair";
+            Assert.Equal("1 Hair Styles 100.63KB", drawable.ListDisplayName);
+            drawable.FilePath = null!;
+            Assert.Equal("1 Hair Styles", drawable.ListDisplayName);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Constructor_AssignsIdAndBuildsComponentName()
     {
         var drawable = CreateDrawable(SexType.male, isProp: false, typeNumeric: 11, number: 7, hasSkin: false);
